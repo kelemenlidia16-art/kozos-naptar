@@ -15,11 +15,9 @@ const db = getFirestore(app);
 /* ================= APP ================= */
 export default function App() {
   const COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
-
   const [entries, setEntries] = useState({});
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
-
   const [formData, setFormData] = useState({
     availability: "Egész nap",
     answer: "Igen",
@@ -33,7 +31,6 @@ export default function App() {
   ];
 
   const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
-
   const formatDate = (y, m, d) => `${y}-${m + 1}-${d}`;
 
   /* ===== FIREBASE ===== */
