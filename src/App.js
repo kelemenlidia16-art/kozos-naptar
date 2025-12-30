@@ -1,190 +1,171 @@
 import { useState, useEffect } from "react";
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
-/* ========== FIREBASE ========== */
-const firebaseConfig = {
-  apiKey: "AIzaSyAxaQKdai1nV7coNTkXwnWF6vlXXUlk4aE",
-  authDomain: "database-7ce1b.firebaseapp.com",
-  projectId: "database-7ce1b",
+/* ===== KONFIG ===== */
+const COLORS = ["green","purple","yellow","orange","red","blue"];
+const COLOR_NAMES = {
+  green: "Habo",
+  purple: "Puszta",
+  yellow: "Jankisz",
+  orange: "Lidi",
+  red: "Sho",
+  blue: "Dorka"
 };
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const WEEKDAYS = ["H","K","Sze","Cs","P","Szo","V"];
 
-/* ========== CONSTANTS ========== */
-const COLORS = ["red", "green", "blue", "purple", "orange", "yellow"];
-const WEEKDAYS = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"];
-const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
-const dateKey = (y, m, d) => `${y}-${m + 1}-${d}`;
-
-/* ========== APP ========== */
+/* ===== APP ===== */
 export default function App() {
-  /* ---- LOGIN ---- */
-  const [userColor, setUserColor] = useState(localStorage.getItem("userColor"));
-
-  /* ---- CALENDAR ---- */
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(0);
+  const [currentDate, setCurrentDate] = useState(new Date(2026,0,1));
   const [entries, setEntries] = useState({});
   const [selectedDay, setSelectedDay] = useState(null);
-  const [editingIndex, setEditingIndex] = useState(null);
 
-  /* ---- FORM ---- */
-  const [form, setForm] = useState({
-    availability: "Egész nap",
-    answer: "Igen",
-  });
+  const [userColor, setUserColor] = useState(
+    localStorage.getItem("userColor")
+  );
 
-  /* ---- DICE / DRAGON ---- */
-  const [rolling, setRolling] = useState(false);
-  const [diceResult, setDiceResult] = useState(null);
-  const [eatDice, setEatDice] = useState(false);
+  /* === Dice / Dragon === */
+  const [rolling,setRolling] = useState(false);
+  const [diceResult,setDiceResult] = useState(null);
+  const [showDice,setShowDice] = useState(true);
+  const [eatDice,setEatDice] = useState(false);
 
-  /* ---- LOAD CLOUD ---- */
-  useEffect(() => {
-    (async () => {
-      const snap = await getDoc(doc(db, "calendar", "shared"));
-      if (snap.exists()) setEntries(snap.data().entries || {});
-    })();
-  }, []);
+  function rollDice(){
+    if(rolling) return;
+    setRolling(true);
+    setDiceResult(null);
+    setEatDice(false);
+    setShowDice(true);
 
-  async function saveCloud(newEntries) {
-    setEntries(newEntries);
-    await setDoc(doc(db, "calendar", "shared"), { entries: newEntries });
+    setTimeout(()=>setEatDice(true),800);
+    setTimeout(()=>setShowDice(false),1200);
+    setTimeout(()=>{
+      setDiceResult(Math.floor(Math.random()*20)+1);
+    },1600);
+    setTimeout(()=>{
+      setShowDice(true);
+      setEatDice(false);
+      setRolling(false);
+    },3600);
   }
 
-  /* ---- LOGIN SCREEN ---- */
-  if (!userColor) {
+  function daysInMonth(y,m){
+    return new Date(y,m+1,0).getDate();
+  }
+
+  function keyOf(d){
+    return `${currentDate.getFullYear()}-${currentDate.getMonth()+1}-${d}`;
+  }
+
+  function saveAnswer(day,answer){
+    const key = keyOf(day);
+    setEntries(prev=>{
+      const arr = prev[key]||[];
+      const filtered = arr.filter(a=>a.color!==userColor);
+      return {...prev,[key]:[...filtered,answer]};
+    });
+  }
+
+  function deleteAnswer(day){
+    const key = keyOf(day);
+    setEntries(prev=>{
+      const arr = (prev[key]||[]).filter(a=>a.color!==userColor);
+      return {...prev,[key]:arr};
+    });
+  }
+
+  if(!userColor){
     return (
-      <div style={{
-        minHeight: "100vh",
-        background: "#111",
-        color: "white",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center"
-      }}>
-        <div>
-          <h2>Válaszd ki a színed</h2>
-          {COLORS.map(c => (
-            <button
-              key={c}
-              onClick={() => {
-                localStorage.setItem("userColor", c);
-                setUserColor(c);
-              }}
-              style={{
-                background: c,
-                margin: 5,
-                padding: "10px 20px",
-                border: "none",
-                cursor: "pointer"
-              }}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
+      <div style={{padding:30}}>
+        <h2>Válaszd ki magad</h2>
+        {COLORS.map(c=>(
+          <button
+            key={c}
+            onClick={()=>{
+              localStorage.setItem("userColor",c);
+              setUserColor(c);
+            }}
+            style={{
+              background:c,
+              margin:5,
+              padding:"10px 20px",
+              textDecoration:
+                localStorage.getItem("userColor")===c?"line-through":"none",
+              opacity:
+                localStorage.getItem("userColor")===c?0.6:1
+            }}
+          >
+            ● {COLOR_NAMES[c]}
+          </button>
+        ))}
       </div>
     );
   }
 
-  /* ---- ANSWERS ---- */
-  function saveAnswer() {
-    const key = dateKey(year, month, selectedDay);
-    const copy = { ...entries };
-    if (!copy[key]) copy[key] = [];
-
-    const entry = { ...form, color: userColor };
-
-    if (editingIndex !== null) copy[key][editingIndex] = entry;
-    else copy[key].push(entry);
-
-    saveCloud(copy);
-    setEditingIndex(null);
-  }
-
-  function deleteAnswer(i) {
-    const key = dateKey(year, month, selectedDay);
-    const copy = { ...entries };
-    copy[key].splice(i, 1);
-    if (copy[key].length === 0) delete copy[key];
-    saveCloud(copy);
-  }
-
-  /* ---- DICE ---- */
-  function rollDice() {
-    setRolling(true);
-    setEatDice(false);
-    setDiceResult(null);
-
-    setTimeout(() => {
-      setEatDice(true);
-    }, 800);
-
-    setTimeout(() => {
-      setDiceResult(Math.floor(Math.random() * 20) + 1);
-      setRolling(false);
-    }, 1600);
-  }
-
-  /* ---- WEEKDAY OFFSET ---- */
-  const firstDayOffset = (new Date(year, month, 1).getDay() + 6) % 7;
-
   return (
     <div style={{
-      minHeight: "100vh",
-      backgroundImage: "url('/assets/hatter.jpg')",
-      backgroundSize: "cover",
-      padding: 20,
-      color: "white"
+      minHeight:"100vh",
+      backgroundImage:"url('/assets/hatter.jpg')",
+      backgroundSize:"cover",
+      padding:20
     }}>
 
-      <h1>🐉 Közös Naptár</h1>
+      <h1>Közös naptár</h1>
 
-      {/* NAV */}
-      <div>
-        <button onClick={() => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)}>◀</button>
-        <b style={{ margin: "0 10px" }}>{year}. {month + 1}.</b>
-        <button onClick={() => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1)}>▶</button>
+      {/* ===== NAV ===== */}
+      <button onClick={()=>setCurrentDate(
+        new Date(currentDate.getFullYear(),currentDate.getMonth()-1,1)
+      )}>◀</button>
+      <b style={{margin:"0 10px"}}>
+        {currentDate.getFullYear()} / {currentDate.getMonth()+1}
+      </b>
+      <button onClick={()=>setCurrentDate(
+        new Date(currentDate.getFullYear(),currentDate.getMonth()+1,1)
+      )}>▶</button>
+
+      {/* ===== WEEKDAYS ===== */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:"repeat(7,1fr)",
+        marginTop:10
+      }}>
+        {WEEKDAYS.map(d=>(
+          <div key={d} style={{fontSize:12,textAlign:"center"}}>{d}</div>
+        ))}
       </div>
 
-      {/* WEEKDAYS */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 60px)", marginTop: 10 }}>
-        {WEEKDAYS.map(d => <div key={d} style={{ textAlign: "center" }}><b>{d}</b></div>)}
-      </div>
-
-      {/* CALENDAR */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 60px)", gap: 6 }}>
-        {Array(firstDayOffset).fill(null).map((_, i) => <div key={i}></div>)}
-
-        {Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1).map(day => {
-          const key = dateKey(year, month, day);
-          const list = entries[key] || [];
+      {/* ===== CALENDAR ===== */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:"repeat(7,1fr)",
+        gap:5
+      }}>
+        {Array.from(
+          {length:daysInMonth(currentDate.getFullYear(),currentDate.getMonth())},
+          (_,i)=>i+1
+        ).map(day=>{
+          const arr = entries[keyOf(day)]||[];
+          const allUsed = COLORS.every(c=>arr.some(a=>a.color===c));
           return (
-            <div
-              key={day}
-              onClick={() => setSelectedDay(day)}
+            <div key={day}
+              onClick={()=>setSelectedDay(day)}
               style={{
-                background: "rgba(255,255,255,0.9)",
-                color: "black",
-                padding: 5,
-                cursor: "pointer"
-              }}
-            >
-              <b>{day}</b>
-              <div style={{ display: "flex", flexWrap: "wrap" }}>
-                {list.map((e, i) => (
-                  <div key={i}
-                    style={{
-                      width: 10,
-                      height: 10,
-                      margin: 1,
-                      borderRadius: "50%",
-                      background: e.answer === "Csak ha nagyon muszáj" ? "transparent" : e.color,
-                      border: e.answer === "Csak ha nagyon muszáj" ? `2px solid ${e.color}` : "none"
-                    }}
-                  />
+                border:"1px solid #333",
+                padding:5,
+                cursor:"pointer"
+              }}>
+              <div style={{color:allUsed?"green":"black"}}>
+                {day}
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap"}}>
+                {arr.map((a,i)=>(
+                  <div key={i} style={{
+                    width:10,height:10,
+                    borderRadius:"50%",
+                    margin:1,
+                    border:a.answer==="muszaj"
+                      ?`2px solid ${a.color}`:"none",
+                    background:
+                      a.answer==="muszaj"?"transparent":a.color
+                  }} />
                 ))}
               </div>
             </div>
@@ -192,90 +173,71 @@ export default function App() {
         })}
       </div>
 
-      {/* DAY PANEL */}
+      {/* ===== MODAL ===== */}
       {selectedDay && (
-        <div style={{ background: "white", color: "black", padding: 10, marginTop: 20 }}>
-          <h3>{year}.{month + 1}.{selectedDay}</h3>
-          {(entries[dateKey(year, month, selectedDay)] || []).map((e, i) => (
+        <div style={{background:"#fff",padding:10,marginTop:20}}>
+          <h3>{selectedDay}. nap válaszai</h3>
+
+          {(entries[keyOf(selectedDay)]||[]).map((a,i)=>(
             <div key={i}>
-              <span style={{ color: e.color }}>⬤</span> {e.availability} – {e.answer}
-              {e.color === userColor && (
-                <>
-                  <button onClick={() => deleteAnswer(i)}>🗑</button>
-                </>
-              )}
+              {COLOR_NAMES[a.color]} – {a.answer}
             </div>
           ))}
 
-          <select onChange={e => setForm({ ...form, availability: e.target.value })}>
-            <option>Egész nap</option>
-            <option>Délután</option>
-            <option>Egyéni idő</option>
-          </select>
+          <button onClick={()=>saveAnswer(selectedDay,{
+            color:userColor,
+            answer:"igen"
+          })}>Igen</button>
 
-          <select onChange={e => setForm({ ...form, answer: e.target.value })}>
-            <option>Igen</option>
-            <option>Csak ha nagyon muszáj</option>
-          </select>
+          <button onClick={()=>saveAnswer(selectedDay,{
+            color:userColor,
+            answer:"muszaj"
+          })}>Csak ha nagyon muszáj</button>
 
-          <button onClick={saveAnswer}>Mentés</button>
+          <button onClick={()=>deleteAnswer(selectedDay)}>Törlés</button>
+          <button onClick={()=>setSelectedDay(null)}>Bezár</button>
         </div>
       )}
 
-      {/* DRAGON */}
-      <img
-        src="/assets/dragon.png"
-        style={{
-          position: "fixed",
-          right: 120,
-          bottom: 20,
-          width: 200,
-          animation: eatDice ? "dragonEat 1s forwards" : "tail 2s infinite"
-        }}
-      />
-
-      {/* DICE */}
-      {!eatDice && (
+      {/* ===== DICE ===== */}
+      {showDice && (
         <img
           src="/assets/dice.png"
+          alt="dice"
           onClick={rollDice}
           style={{
-            position: "fixed",
-            right: 20,
-            bottom: 20,
-            width: 80,
-            cursor: "pointer",
-            animation: rolling ? "spin 0.4s infinite" : "none"
+            width:80,
+            position:"fixed",
+            bottom:20,
+            right:20,
+            cursor:"pointer"
           }}
         />
       )}
 
       {diceResult && (
         <div style={{
-          position: "fixed",
-          right: 300,
-          bottom: 100,
-          fontSize: 36,
-          background: "black",
-          padding: 10
+          position:"fixed",
+          bottom:120,
+          right:40,
+          fontSize:24
         }}>
           🎲 {diceResult}
         </div>
       )}
 
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        @keyframes tail {
-          0%,100% { transform: rotate(0deg); }
-          50% { transform: rotate(3deg); }
-        }
-        @keyframes dragonEat {
-          to { transform: translateX(-80px) scale(1.1); }
-        }
-      `}</style>
-
+      {eatDice && (
+        <img
+          src="/assets/dragon.png"
+          alt="dragon"
+          style={{
+            width:200,
+            position:"fixed",
+            bottom:20,
+            right:20
+          }}
+        />
+      )}
     </div>
   );
 }
