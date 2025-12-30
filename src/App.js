@@ -11,31 +11,36 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-/* ========== HELPERS ========== */
+/* ========== CONSTANTS ========== */
 const COLORS = ["red", "green", "blue", "purple", "orange", "yellow"];
+const WEEKDAYS = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"];
 const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
 const dateKey = (y, m, d) => `${y}-${m + 1}-${d}`;
 
 /* ========== APP ========== */
 export default function App() {
-  const [userColor, setUserColor] = useState(
-    localStorage.getItem("userColor")
-  );
+  /* ---- LOGIN ---- */
+  const [userColor, setUserColor] = useState(localStorage.getItem("userColor"));
+
+  /* ---- CALENDAR ---- */
+  const [year, setYear] = useState(2026);
+  const [month, setMonth] = useState(0);
   const [entries, setEntries] = useState({});
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [month, setMonth] = useState(new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
 
+  /* ---- FORM ---- */
   const [form, setForm] = useState({
     availability: "Egész nap",
     answer: "Igen",
   });
 
+  /* ---- DICE / DRAGON ---- */
   const [rolling, setRolling] = useState(false);
   const [diceResult, setDiceResult] = useState(null);
+  const [eatDice, setEatDice] = useState(false);
 
-  /* ========== CLOUD ========== */
+  /* ---- LOAD CLOUD ---- */
   useEffect(() => {
     (async () => {
       const snap = await getDoc(doc(db, "calendar", "shared"));
@@ -48,16 +53,16 @@ export default function App() {
     await setDoc(doc(db, "calendar", "shared"), { entries: newEntries });
   }
 
-  /* ========== LOGIN ========== */
+  /* ---- LOGIN SCREEN ---- */
   if (!userColor) {
     return (
       <div style={{
         minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         background: "#111",
-        color: "white"
+        color: "white",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center"
       }}>
         <div>
           <h2>Válaszd ki a színed</h2>
@@ -84,34 +89,19 @@ export default function App() {
     );
   }
 
-  /* ========== ANSWERS ========== */
+  /* ---- ANSWERS ---- */
   function saveAnswer() {
     const key = dateKey(year, month, selectedDay);
     const copy = { ...entries };
     if (!copy[key]) copy[key] = [];
 
-    const entry = {
-      ...form,
-      color: userColor
-    };
+    const entry = { ...form, color: userColor };
 
-    if (editingIndex !== null) {
-      copy[key][editingIndex] = entry;
-    } else {
-      copy[key].push(entry);
-    }
+    if (editingIndex !== null) copy[key][editingIndex] = entry;
+    else copy[key].push(entry);
 
     saveCloud(copy);
     setEditingIndex(null);
-  }
-
-  function editAnswer(i) {
-    const key = dateKey(year, month, selectedDay);
-    setForm({
-      availability: entries[key][i].availability,
-      answer: entries[key][i].answer,
-    });
-    setEditingIndex(i);
   }
 
   function deleteAnswer(i) {
@@ -120,20 +110,27 @@ export default function App() {
     copy[key].splice(i, 1);
     if (copy[key].length === 0) delete copy[key];
     saveCloud(copy);
-    setEditingIndex(null);
   }
 
-  /* ========== DICE ========== */
+  /* ---- DICE ---- */
   function rollDice() {
     setRolling(true);
+    setEatDice(false);
     setDiceResult(null);
+
+    setTimeout(() => {
+      setEatDice(true);
+    }, 800);
+
     setTimeout(() => {
       setDiceResult(Math.floor(Math.random() * 20) + 1);
       setRolling(false);
-    }, 1200);
+    }, 1600);
   }
 
-  /* ========== UI ========== */
+  /* ---- WEEKDAY OFFSET ---- */
+  const firstDayOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -143,19 +140,24 @@ export default function App() {
       color: "white"
     }}>
 
-      <h1>🎲 Közös Naptár</h1>
+      <h1>🐉 Közös Naptár</h1>
 
-      {/* MONTH NAV */}
-      <div style={{ marginBottom: 10 }}>
-        <button onClick={() => setMonth(m => m === 0 ? 11 : m - 1)}>◀</button>
-        <b style={{ margin: "0 10px" }}>
-          {year}. {month + 1}.
-        </b>
-        <button onClick={() => setMonth(m => m === 11 ? 0 : m + 1)}>▶</button>
+      {/* NAV */}
+      <div>
+        <button onClick={() => month === 0 ? (setMonth(11), setYear(y => y - 1)) : setMonth(m => m - 1)}>◀</button>
+        <b style={{ margin: "0 10px" }}>{year}. {month + 1}.</b>
+        <button onClick={() => month === 11 ? (setMonth(0), setYear(y => y + 1)) : setMonth(m => m + 1)}>▶</button>
+      </div>
+
+      {/* WEEKDAYS */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 60px)", marginTop: 10 }}>
+        {WEEKDAYS.map(d => <div key={d} style={{ textAlign: "center" }}><b>{d}</b></div>)}
       </div>
 
       {/* CALENDAR */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 60px)", gap: 6 }}>
+        {Array(firstDayOffset).fill(null).map((_, i) => <div key={i}></div>)}
+
         {Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1).map(day => {
           const key = dateKey(year, month, day);
           const list = entries[key] || [];
@@ -173,19 +175,14 @@ export default function App() {
               <b>{day}</b>
               <div style={{ display: "flex", flexWrap: "wrap" }}>
                 {list.map((e, i) => (
-                  <div
-                    key={i}
+                  <div key={i}
                     style={{
                       width: 10,
                       height: 10,
                       margin: 1,
                       borderRadius: "50%",
-                      background: e.answer === "Csak ha nagyon muszáj"
-                        ? "transparent"
-                        : e.color,
-                      border: e.answer === "Csak ha nagyon muszáj"
-                        ? `2px solid ${e.color}`
-                        : "none"
+                      background: e.answer === "Csak ha nagyon muszáj" ? "transparent" : e.color,
+                      border: e.answer === "Csak ha nagyon muszáj" ? `2px solid ${e.color}` : "none"
                     }}
                   />
                 ))}
@@ -197,23 +194,18 @@ export default function App() {
 
       {/* DAY PANEL */}
       {selectedDay && (
-        <div style={{ marginTop: 20, background: "white", color: "black", padding: 10 }}>
+        <div style={{ background: "white", color: "black", padding: 10, marginTop: 20 }}>
           <h3>{year}.{month + 1}.{selectedDay}</h3>
-
           {(entries[dateKey(year, month, selectedDay)] || []).map((e, i) => (
             <div key={i}>
-              <span style={{ color: e.color }}>⬤</span>
-              {" "}{e.availability} – {e.answer}
+              <span style={{ color: e.color }}>⬤</span> {e.availability} – {e.answer}
               {e.color === userColor && (
                 <>
-                  <button onClick={() => editAnswer(i)}>✏️</button>
                   <button onClick={() => deleteAnswer(i)}>🗑</button>
                 </>
               )}
             </div>
           ))}
-
-          <hr />
 
           <select onChange={e => setForm({ ...form, availability: e.target.value })}>
             <option>Egész nap</option>
@@ -230,26 +222,40 @@ export default function App() {
         </div>
       )}
 
-      {/* DICE */}
+      {/* DRAGON */}
       <img
-        src="/assets/dice.png"
-        onClick={rollDice}
+        src="/assets/dragon.png"
         style={{
           position: "fixed",
-          right: 20,
+          right: 120,
           bottom: 20,
-          width: 80,
-          cursor: "pointer",
-          animation: rolling ? "spin 0.5s linear infinite" : "none"
+          width: 200,
+          animation: eatDice ? "dragonEat 1s forwards" : "tail 2s infinite"
         }}
       />
+
+      {/* DICE */}
+      {!eatDice && (
+        <img
+          src="/assets/dice.png"
+          onClick={rollDice}
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 20,
+            width: 80,
+            cursor: "pointer",
+            animation: rolling ? "spin 0.4s infinite" : "none"
+          }}
+        />
+      )}
 
       {diceResult && (
         <div style={{
           position: "fixed",
-          right: 120,
-          bottom: 40,
-          fontSize: 32,
+          right: 300,
+          bottom: 100,
+          fontSize: 36,
           background: "black",
           padding: 10
         }}>
@@ -259,10 +265,17 @@ export default function App() {
 
       <style>{`
         @keyframes spin {
-          from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        @keyframes tail {
+          0%,100% { transform: rotate(0deg); }
+          50% { transform: rotate(3deg); }
+        }
+        @keyframes dragonEat {
+          to { transform: translateX(-80px) scale(1.1); }
+        }
       `}</style>
+
     </div>
   );
 }
