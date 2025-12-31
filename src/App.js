@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import "./App.css";
 
 const USERS = {
   green: "Habo",
@@ -9,61 +10,44 @@ const USERS = {
   blue: "Dorka"
 };
 
-const MONTHS = [
-  "Január","Február","Március","Április","Május","Június",
-  "Július","Augusztus","Szeptember","Október","November","December"
-];
+const MONTHS = ["Január","Február","Március","Április","Május","Június",
+"Július","Augusztus","Szeptember","Október","November","December"];
 
-const DAYS = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
+const DAYS = ["H","K","Sze","Cs","P","Szo","V"];
 
 export default function App() {
-  const [color, setColor] = useState(localStorage.getItem("userColor"));
+  const [userColor, setUserColor] = useState(localStorage.getItem("color"));
+  const [calendar, setCalendar] = useState(
+    JSON.parse(localStorage.getItem("calendar") || "{}")
+  );
   const [month, setMonth] = useState(0);
   const [year] = useState(2026);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [data, setData] = useState(
-    JSON.parse(localStorage.getItem("calendarData") || "{}")
-  );
   const [text, setText] = useState("");
+  const [dice, setDice] = useState(null);
 
   useEffect(() => {
-    localStorage.setItem("calendarData", JSON.stringify(data));
-  }, [data]);
+    localStorage.setItem("calendar", JSON.stringify(calendar));
+  }, [calendar]);
 
-  if (!color) {
-    const usedColors = Object.keys(data);
-
+  /* LOGIN */
+  if (!userColor) {
     return (
-      <div style={loginStyle}>
-        <h2>Válaszd ki magad</h2>
-
-        {Object.entries(USERS).map(([c, name]) => (
-          <button
-            key={c}
-            onClick={()=>{
-              setColor(c);
-              localStorage.setItem("userColor", c);
-            }}
-            style={{
-              margin:5,
-              padding:10,
-              textDecoration: usedColors.includes(c) ? "line-through" : "none"
-            }}
-          >
-            🟢 {name}
+      <div className="login">
+        <h2>Ki vagy?</h2>
+        {Object.entries(USERS).map(([c,name])=>(
+          <button key={c} onClick={()=>{
+            setUserColor(c);
+            localStorage.setItem("color",c);
+          }}>
+            {name}
           </button>
         ))}
-
-        <br />
-
-        <button
-          style={{marginTop:20}}
-          onClick={()=>{
-            localStorage.clear();
-            window.location.reload();
-          }}
-        >
-          🔄 Minden adat törlése
+        <button className="danger" onClick={()=>{
+          localStorage.clear();
+          location.reload();
+        }}>
+          🔥 MINDEN TÖRLÉSE
         </button>
       </div>
     );
@@ -71,129 +55,81 @@ export default function App() {
 
   const daysInMonth = new Date(year, month+1, 0).getDate();
 
-  const saveAnswer = () => {
+  const save = () => {
     const key = `${year}-${month}-${selectedDay}`;
-    setData({
-      ...data,
-      [key]: { color, text }
+    const entry = {
+      user: USERS[userColor],
+      color: userColor,
+      text
+    };
+    setCalendar({
+      ...calendar,
+      [key]: [...(calendar[key] || []), entry]
     });
     setText("");
   };
 
-  const deleteAnswer = () => {
-    const key = `${year}-${month}-${selectedDay}`;
-    const copy = {...data};
-    delete copy[key];
-    setData(copy);
+  const rollDice = () => {
+    const r = Math.floor(Math.random()*6)+1;
+    setDice(r);
+    setTimeout(()=>setDice(null), 3000);
   };
 
   return (
-    <div style={wrapperStyle}>
+    <div className="app">
       <h1>{MONTHS[month]} {year}</h1>
 
-      <div>
+      <div className="nav">
         <button onClick={()=>setMonth((month+11)%12)}>◀</button>
         <button onClick={()=>setMonth((month+1)%12)}>▶</button>
       </div>
 
-      <div style={dayHeader}>
-        {DAYS.map(d=>(
-          <div key={d} style={{fontSize:12}}>{d}</div>
-        ))}
+      <div className="days">
+        {DAYS.map(d=><div key={d}>{d}</div>)}
       </div>
 
-      <div style={calendarGrid}>
+      <div className="grid">
         {[...Array(daysInMonth)].map((_,i)=>{
-          const d = i+1;
-          const key = `${year}-${month}-${d}`;
+          const d=i+1;
+          const key=`${year}-${month}-${d}`;
           return (
-            <div
-              key={d}
-              onClick={()=>setSelectedDay(d)}
-              style={dayCell}
-            >
+            <div key={d} className="cell" onClick={()=>setSelectedDay(d)}>
               {d}
-              {data[key] && (
-                <div
-                  style={{
-                    width:10,
-                    height:10,
-                    borderRadius:"50%",
-                    background:data[key].color,
-                    margin:"auto"
-                  }}
-                />
-              )}
+              {(calendar[key]||[]).map((e,idx)=>(
+                <span key={idx} className="dot" style={{background:e.color}} />
+              ))}
             </div>
           );
         })}
       </div>
 
       {selectedDay && (
-        <div style={modal}>
+        <div className="modal">
           <h3>{year}.{month+1}.{selectedDay}</h3>
+
+          {(calendar[`${year}-${month}-${selectedDay}`]||[]).map((e,i)=>(
+            <div key={i} className="entry">
+              <b style={{color:e.color}}>{e.user}</b>: {e.text}
+            </div>
+          ))}
 
           <textarea
             value={text}
             onChange={e=>setText(e.target.value)}
-            placeholder="Saját válasz"
+            placeholder="Írj valamit..."
           />
 
-          <br />
+          <button onClick={save}>Mentés</button>
+          <button onClick={rollDice}>🎲 Dobás</button>
+          <button onClick={()=>setSelectedDay(null)}>Bezár</button>
+        </div>
+      )}
 
-          <button onClick={saveAnswer}>💾 Mentés</button>
-          <button onClick={deleteAnswer}>🗑 Törlés</button>
-
-          <br />
-          <button onClick={()=>setSelectedDay(null)}>❌ Bezár</button>
+      {dice && (
+        <div className="dice">
+          🎲 {dice}
         </div>
       )}
     </div>
   );
 }
-
-const wrapperStyle = {
-  minHeight:"100vh",
-  backgroundImage:"url('/assets/hatter.jpg')",
-  backgroundSize:"cover",
-  padding:20,
-  backgroundColor:"rgba(255,255,255,0.85)"
-};
-
-const calendarGrid = {
-  display:"grid",
-  gridTemplateColumns:"repeat(7,1fr)",
-  gap:5
-};
-
-const dayCell = {
-  border:"1px solid #333",
-  padding:5,
-  cursor:"pointer",
-  background:"rgba(255,255,255,0.7)"
-};
-
-const modal = {
-  position:"fixed",
-  top:"20%",
-  left:"50%",
-  transform:"translateX(-50%)",
-  background:"#fff",
-  padding:20,
-  border:"2px solid #333",
-  zIndex:10
-};
-
-const dayHeader = {
-  display:"grid",
-  gridTemplateColumns:"repeat(7,1fr)",
-  marginBottom:5
-};
-
-const loginStyle = {
-  minHeight:"100vh",
-  display:"flex",
-  flexDirection:"column",
-  justifyContent:"center",
-  alignItems:"center"
-};
