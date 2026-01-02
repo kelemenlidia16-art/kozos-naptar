@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -9,13 +9,14 @@ const firebaseConfig = {
   projectId: "database-7ce1b",
 };
 
-const db = getFirestore(initializeApp(firebaseConfig));
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 /* ===== USERS ===== */
 const USERS = [
   { name: "Habo", color: "green" },
   { name: "Puszta", color: "purple" },
-  { name: "Jankisz", color: "yellow" },
+  { name: "Jankisz", color: "gold" },
   { name: "Lidi", color: "orange" },
   { name: "Sho", color: "red" },
   { name: "Dorka", color: "blue" },
@@ -27,46 +28,38 @@ const MONTHS = [
   "Július","Augusztus","Szeptember","Október","November","December"
 ];
 
-/* ===== HELPERS ===== */
 const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
-const firstDayOffset = (y, m) => (new Date(y, m, 1).getDay() + 6) % 7;
-const dateKey = (y, m, d) => `${y}-${m + 1}-${d}`;
+const firstOffset = (y, m) => (new Date(y, m, 1).getDay() + 6) % 7;
+const keyFor = (y, m, d) => `${y}-${m+1}-${d}`;
 
 /* ===== APP ===== */
 export default function App() {
   const [user, setUser] = useState(null);
   const [entries, setEntries] = useState({});
-  const [current, setCurrent] = useState(new Date(2026, 0, 1));
+  const [date, setDate] = useState(new Date(2026, 0, 1));
   const [selectedDay, setSelectedDay] = useState(null);
-
-  const [form, setForm] = useState({
-    answer: "Igen",
-    customTime: "",
-  });
+  const [form, setForm] = useState({ answer: "Igen", time: "" });
 
   /* LOAD */
   useEffect(() => {
-    (async () => {
-      const snap = await getDoc(doc(db, "calendar", "shared"));
+    getDoc(doc(db, "calendar", "shared")).then(snap => {
       if (snap.exists()) setEntries(snap.data());
-    })();
+    });
   }, []);
 
-  /* SAVE CLOUD */
-  const saveCloud = async (data) => {
-    await setDoc(doc(db, "calendar", "shared"), data);
-  };
+  const saveCloud = (data) =>
+    setDoc(doc(db, "calendar", "shared"), data);
 
   /* LOGIN */
   if (!user) {
     return (
       <div style={login}>
-        <h2>Ki vagy?</h2>
+        <h2>Válaszd ki magad</h2>
         {USERS.map(u => (
           <button
             key={u.name}
             onClick={() => setUser(u)}
-            style={{ ...userBtn, borderColor: u.color, color: u.color }}
+            style={{ ...btn, borderColor: u.color, color: u.color }}
           >
             ● {u.name}
           </button>
@@ -75,66 +68,42 @@ export default function App() {
     );
   }
 
-  /* SAVE DAY */
-  const saveDay = () => {
-    const key = dateKey(
-      current.getFullYear(),
-      current.getMonth(),
-      selectedDay
-    );
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const days = daysInMonth(y, m);
+  const offset = firstOffset(y, m);
 
-    const dayData = entries[key] || [];
-    const withoutMe = dayData.filter(e => e.name !== user.name);
+  const saveDay = () => {
+    const key = keyFor(y, m, selectedDay);
+    const prev = entries[key] || [];
+    const filtered = prev.filter(e => e.name !== user.name);
 
     const updated = [
-      ...withoutMe,
-      {
-        name: user.name,
-        color: user.color,
-        answer: form.answer,
-        customTime: form.customTime
-      }
+      ...filtered,
+      { name: user.name, color: user.color, ...form }
     ];
 
-    const newEntries = { ...entries, [key]: updated };
-    setEntries(newEntries);
-    saveCloud(newEntries);
+    const all = { ...entries, [key]: updated };
+    setEntries(all);
+    saveCloud(all);
     setSelectedDay(null);
   };
 
-  /* DELETE */
-  const deleteMy = () => {
-    const key = dateKey(
-      current.getFullYear(),
-      current.getMonth(),
-      selectedDay
-    );
-
+  const deleteMine = () => {
+    const key = keyFor(y, m, selectedDay);
     const filtered = (entries[key] || []).filter(e => e.name !== user.name);
-    const newEntries = { ...entries, [key]: filtered };
-    setEntries(newEntries);
-    saveCloud(newEntries);
+    const all = { ...entries, [key]: filtered };
+    setEntries(all);
+    saveCloud(all);
     setSelectedDay(null);
   };
-
-  /* CALENDAR */
-  const y = current.getFullYear();
-  const m = current.getMonth();
-  const days = daysInMonth(y, m);
-  const offset = firstDayOffset(y, m);
-
-  const selectedKey = selectedDay
-    ? dateKey(y, m, selectedDay)
-    : null;
-
-  const selectedEntries = selectedKey ? entries[selectedKey] || [] : [];
 
   return (
-    <div style={initializeApp(firebaseConfig)}>
+    <div style={{ padding: 10 }}>
       <div style={header}>
-        <button onClick={() => setCurrent(new Date(y, m - 1, 1))}>◀</button>
+        <button onClick={() => setDate(new Date(y, m-1, 1))}>◀</button>
         <h2>{MONTHS[m]} {y}</h2>
-        <button onClick={() => setCurrent(new Date(y, m + 1, 1))}>▶</button>
+        <button onClick={() => setDate(new Date(y, m+1, 1))}>▶</button>
       </div>
 
       <div style={grid}>
@@ -143,36 +112,24 @@ export default function App() {
 
         {Array(days).fill(0).map((_,i)=>{
           const d = i+1;
-          const key = dateKey(y,m,d);
+          const key = keyFor(y,m,d);
           const dayEntries = entries[key] || [];
 
           return (
-            <div
-              key={d}
-              style={day}
-              onClick={() => {
-                setSelectedDay(d);
-                const mine = dayEntries.find(e => e.name === user.name);
-                setForm(
-                  mine || { answer: "Igen", customTime: "" }
-                );
-              }}
-            >
+            <div key={d} style={day} onClick={()=>{
+              setSelectedDay(d);
+              const mine = dayEntries.find(e=>e.name===user.name);
+              setForm(mine || { answer:"Igen", time:"" });
+            }}>
               <strong>{d}</strong>
               <div style={{ display:"flex", flexWrap:"wrap" }}>
                 {dayEntries.map((e,idx)=>(
-                  <div
-                    key={idx}
-                    style={{
-                      width:10,
-                      height:10,
-                      borderRadius:"50%",
-                      margin:1,
-                      background:
-                        e.answer === "Igen" ? e.color : "transparent",
-                      border:`2px solid ${e.color}`
-                    }}
-                  />
+                  <div key={idx} style={{
+                    width:10,height:10,borderRadius:"50%",
+                    margin:1,
+                    border:`2px solid ${e.color}`,
+                    background:e.answer==="Igen"?e.color:"transparent"
+                  }} />
                 ))}
               </div>
             </div>
@@ -180,53 +137,36 @@ export default function App() {
         })}
       </div>
 
-      {/* DETAILS */}
       {selectedDay && (
         <div style={modal}>
           <h3>{MONTHS[m]} {selectedDay}</h3>
 
-          <h4>Válaszok:</h4>
-          {selectedEntries.map((e,idx)=>(
-            <div
-              key={idx}
-              style={{
-                border:`2px solid ${e.color}`,
-                padding:5,
-                marginBottom:5
-              }}
-            >
+          {(entries[keyFor(y,m,selectedDay)]||[]).map((e,idx)=>(
+            <div key={idx} style={{
+              border:`2px solid ${e.color}`,
+              padding:4, marginBottom:4
+            }}>
               <strong>{e.name}</strong> – {e.answer}
-              {e.customTime && ` (${e.customTime} órától)`}
+              {e.time && ` (${e.time}:00-tól)`}
             </div>
           ))}
 
-          <hr />
-
-          <h4>Saját válasz</h4>
-
-          <select
-            value={form.answer}
-            onChange={e=>setForm({...form,answer:e.target.value})}
-          >
+          <select value={form.answer}
+            onChange={e=>setForm({...form,answer:e.target.value})}>
             <option>Igen</option>
             <option>Csak ha nagyon muszáj</option>
           </select>
 
-          <div>
-            <button onClick={() => setForm({...form,customTime:""})}>
-              Más időben →
-            </button>
-            <input
-              type="number"
-              placeholder="órától"
-              value={form.customTime}
-              onChange={e=>setForm({...form,customTime:e.target.value})}
-            />
-          </div>
+          <input
+            type="number"
+            placeholder="órától"
+            value={form.time}
+            onChange={e=>setForm({...form,time:e.target.value})}
+          />
 
           <div>
             <button onClick={saveDay}>Mentés</button>
-            <button onClick={deleteMy}>Törlés</button>
+            <button onClick={deleteMine}>Törlés</button>
             <button onClick={()=>setSelectedDay(null)}>Bezár</button>
           </div>
         </div>
@@ -236,37 +176,16 @@ export default function App() {
 }
 
 /* ===== STYLES ===== */
-const app = { minHeight:"100vh", padding:10 };
-const header = { display:"flex", justifyContent:"space-between" };
 const grid = { display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 };
+const day = { border:"1px solid #ccc", minHeight:60, padding:4 };
 const weekday = { textAlign:"center", fontSize:12 };
-const day = {
-  minHeight:60,
-  border:"1px solid #ccc",
-  padding:4,
-  cursor:"pointer"
-};
+const header = { display:"flex", justifyContent:"space-between" };
 const modal = {
-  position:"fixed",
-  bottom:0,
-  left:0,
-  right:0,
-  background:"#fff",
-  padding:10,
-  maxHeight:"60vh",
-  overflow:"auto"
+  position:"fixed", bottom:0, left:0, right:0,
+  background:"#fff", padding:10, maxHeight:"60vh", overflow:"auto"
 };
 const login = {
-  minHeight:"100vh",
-  display:"flex",
-  flexDirection:"column",
-  justifyContent:"center",
-  alignItems:"center"
+  minHeight:"100vh", display:"flex",
+  flexDirection:"column", alignItems:"center", justifyContent:"center"
 };
-const userBtn = {
-  background:"transparent",
-  border:"2px solid",
-  padding:10,
-  margin:5,
-  cursor:"pointer"
-};
+const btn = { background:"none", border:"2px solid", padding:10, margin:5 };
