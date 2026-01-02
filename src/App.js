@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
-/* ================= FIREBASE ================= */
+/* ========== FIREBASE ========== */
 const firebaseConfig = {
   apiKey: "AIzaSyAxaQKdai1nV7coNTkXwnWF6vlXXUlk4aE",
   authDomain: "database-7ce1b.firebaseapp.com",
@@ -12,7 +12,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-/* ================= CONSTANTS ================= */
+/* ========== USERS ========== */
 const USERS = [
   { color: "green", name: "Habo" },
   { color: "purple", name: "Puszta" },
@@ -22,149 +22,118 @@ const USERS = [
   { color: "blue", name: "Dorka" },
 ];
 
-const WEEKDAYS = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"];
-const MONTHS = [
-  "Január", "Február", "Március", "Április", "Május", "Június",
-  "Július", "Augusztus", "Szeptember", "Október", "November", "December"
-];
+const WEEKDAYS = ["Hétfő","Kedd","Szerda","Csütörtök","Péntek","Szombat","Vasárnap"];
+const MONTHS = ["Január","Február","Március","Április","Május","Június","Július","Augusztus","Szeptember","Október","November","December"];
 
-/* ================= HELPERS ================= */
-function daysInMonth(year, month) {
-  return new Date(year, month + 1, 0).getDate();
-}
+/* ========== HELPERS ========== */
+const daysInMonth = (y,m)=> new Date(y,m+1,0).getDate();
+const firstWeekday = (y,m)=> (new Date(y,m,1).getDay()+6)%7;
+const dateKey = (y,m,d)=>`${y}-${m+1}-${d}`;
 
-function firstWeekday(year, month) {
-  const d = new Date(year, month, 1);
-  return (d.getDay() + 6) % 7; // hétfő = 0
-}
-
-function dateKey(y, m, d) {
-  return `${y}-${m + 1}-${d}`;
-}
-
-/* ================= APP ================= */
-export default function App() {
+/* ========== APP ========== */
+export default function App(){
   const [year] = useState(2026);
-  const [month, setMonth] = useState(0);
-  const [entries, setEntries] = useState({});
-  const [user, setUser] = useState(null);
-  const [selectedDay, setSelectedDay] = useState(null);
-  const [form, setForm] = useState({
-    availability: "Egész nap",
-    answer: "Igen",
-  });
+  const [month,setMonth] = useState(0);
+  const [entries,setEntries] = useState({});
+  const [user,setUser] = useState(null);
+  const [selectedDay,setSelectedDay] = useState(null);
+  const [form,setForm] = useState({availability:"Egész nap",answer:"Igen"});
 
-  /* ----- LOAD ----- */
-  useEffect(() => {
-    (async () => {
-      const ref = doc(db, "calendar", "shared");
-      const snap = await getDoc(ref);
-      if (snap.exists()) setEntries(snap.data());
-    })();
-  }, []);
+  /* 🎲 dice */
+  const [dice,setDice] = useState(null);
 
-  /* ----- SAVE CLOUD ----- */
-  async function saveCloud(data) {
-    await setDoc(doc(db, "calendar", "shared"), data);
+  useEffect(()=>{
+    getDoc(doc(db,"calendar","shared")).then(s=>{
+      if(s.exists()) setEntries(s.data());
+    });
+  },[]);
+
+  const saveCloud = data => setDoc(doc(db,"calendar","shared"),data);
+
+  function openDay(d){
+    setSelectedDay(d);
+    const mine = (entries[dateKey(year,month,d)]||[]).find(e=>e.color===user.color);
+    setForm(mine || {availability:"Egész nap",answer:"Igen"});
   }
 
-  /* ----- DAY CLICK ----- */
-  function openDay(day) {
-    setSelectedDay(day);
-    const key = dateKey(year, month, day);
-    const mine = (entries[key] || []).find(e => e.color === user.color);
-    if (mine) setForm(mine);
-    else setForm({ availability: "Egész nap", answer: "Igen" });
+  function saveDay(){
+    const key = dateKey(year,month,selectedDay);
+    const list = (entries[key]||[]).filter(e=>e.color!==user.color);
+    const updated = [...list,{...form,color:user.color}];
+    const n = {...entries,[key]:updated};
+    setEntries(n); saveCloud(n); setSelectedDay(null);
   }
 
-  function saveDay() {
-    const key = dateKey(year, month, selectedDay);
-    const list = entries[key] || [];
-    const filtered = list.filter(e => e.color !== user.color);
-    const updated = [...filtered, { ...form, color: user.color }];
-    const newEntries = { ...entries, [key]: updated };
-    setEntries(newEntries);
-    saveCloud(newEntries);
-    setSelectedDay(null);
+  function deleteDay(){
+    const key = dateKey(year,month,selectedDay);
+    const n = {...entries,[key]:(entries[key]||[]).filter(e=>e.color!==user.color)};
+    setEntries(n); saveCloud(n); setSelectedDay(null);
   }
 
-  function deleteDay() {
-    const key = dateKey(year, month, selectedDay);
-    const list = (entries[key] || []).filter(e => e.color !== user.color);
-    const newEntries = { ...entries, [key]: list };
-    setEntries(newEntries);
-    saveCloud(newEntries);
-    setSelectedDay(null);
+  /* 🎲 DICE */
+  function rollDice(){
+    const r = Math.floor(Math.random()*20)+1;
+    setDice(r);
+    setTimeout(()=>setDice(null),3000);
   }
 
-  /* ================= LOGIN ================= */
-  if (!user) {
-    const used = Object.values(entries).flat().map(e => e.color);
-    return (
-      <div style={{ padding: 20 }}>
-        <h2>Válaszd ki ki vagy</h2>
-        {USERS.map(u => (
-          <button
-            key={u.color}
-            onClick={() => setUser(u)}
+  /* ===== LOGIN ===== */
+  if(!user){
+    const used = Object.values(entries).flat().map(e=>e.color);
+    return(
+      <div style={{minHeight:"100vh",background:"url(/assets/hatter.jpg) center/cover",padding:40,color:"white"}}>
+        <h2>Ki vagy?</h2>
+        {USERS.map(u=>(
+          <button key={u.color}
+            onClick={()=>setUser(u)}
             style={{
-              margin: 5,
-              padding: 10,
-              textDecoration: used.includes(u.color) ? "line-through" : "none",
-            }}
-          >
-            🟢 {u.name}
+              display:"block",margin:10,padding:10,
+              background:u.color,color:"black",
+              textDecoration:used.includes(u.color)?"line-through":"none"
+            }}>
+            ● {u.name}
           </button>
         ))}
       </div>
     );
   }
 
-  /* ================= CALENDAR ================= */
-  const blanks = firstWeekday(year, month);
-  const days = daysInMonth(year, month);
+  const blanks = firstWeekday(year,month);
+  const days = daysInMonth(year,month);
 
-  return (
-    <div style={{ padding: 20 }}>
+  return(
+    <div style={{
+      minHeight:"100vh",
+      background:"url(/assets/hatter.jpg) center/cover",
+      padding:20,color:"white"
+    }}>
       <h1>{MONTHS[month]} {year}</h1>
-      <button onClick={() => setMonth(m => m - 1)} disabled={month === 0}>◀</button>
-      <button onClick={() => setMonth(m => m + 1)} disabled={month === 11}>▶</button>
+      <button onClick={()=>setMonth(m=>m-1)} disabled={month===0}>◀</button>
+      <button onClick={()=>setMonth(m=>m+1)} disabled={month===11}>▶</button>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginTop: 10 }}>
-        {WEEKDAYS.map(d => <b key={d}>{d}</b>)}
-        {[...Array(blanks)].map((_, i) => <div key={"b" + i} />)}
-
-        {[...Array(days)].map((_, i) => {
-          const day = i + 1;
-          const key = dateKey(year, month, day);
-          const list = entries[key] || [];
-          const allSix = USERS.every(u => list.some(e => e.color === u.color));
-
-          return (
-            <div
-              key={day}
-              onClick={() => openDay(day)}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginTop:10}}>
+        {WEEKDAYS.map(d=><b key={d} style={{fontSize:12}}>{d}</b>)}
+        {[...Array(blanks)].map((_,i)=><div key={i}/>)}
+        {[...Array(days)].map((_,i)=>{
+          const day=i+1;
+          const list=entries[dateKey(year,month,day)]||[];
+          const allSix=USERS.every(u=>list.some(e=>e.color===u.color));
+          return(
+            <div key={day} onClick={()=>openDay(day)}
               style={{
-                border: "1px solid #999",
-                padding: 5,
-                background: allSix ? "#9f9" : "transparent",
-                cursor: "pointer"
-              }}
-            >
-              <div>{day}</div>
-              <div style={{ display: "flex", flexWrap: "wrap" }}>
-                {list.map((e, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      width: 10,
-                      height: 10,
-                      margin: 1,
-                      borderRadius: "50%",
-                      background: e.answer === "Csak ha nagyon muszáj" ? "transparent" : e.color,
-                      border: `2px solid ${e.color}`,
-                    }}
-                  />
+                border:"1px solid #aaa",
+                padding:5,
+                background:allSix?"rgba(0,255,0,0.3)":"rgba(0,0,0,0.4)",
+                cursor:"pointer"
+              }}>
+              {day}
+              <div style={{display:"flex",flexWrap:"wrap"}}>
+                {list.map((e,i)=>(
+                  <div key={i} style={{
+                    width:10,height:10,margin:1,borderRadius:"50%",
+                    background:e.answer==="Csak ha nagyon muszáj"?"transparent":e.color,
+                    border:`2px solid ${e.color}`
+                  }}/>
                 ))}
               </div>
             </div>
@@ -173,26 +142,37 @@ export default function App() {
       </div>
 
       {selectedDay && (
-        <div style={{ marginTop: 20 }}>
+        <div style={{marginTop:20,background:"#0008",padding:10}}>
           <h3>{selectedDay}. {MONTHS[month]}</h3>
-
-          <select value={form.availability}
-            onChange={e => setForm({ ...form, availability: e.target.value })}>
+          <select value={form.availability} onChange={e=>setForm({...form,availability:e.target.value})}>
             <option>Egész nap</option>
             <option>Délután</option>
             <option>Egyéni idő</option>
           </select>
-
-          <select value={form.answer}
-            onChange={e => setForm({ ...form, answer: e.target.value })}>
+          <select value={form.answer} onChange={e=>setForm({...form,answer:e.target.value})}>
             <option>Igen</option>
             <option>Csak ha nagyon muszáj</option>
           </select>
-
-          <br /><br />
+          <br/>
           <button onClick={saveDay}>Mentés</button>
           <button onClick={deleteDay}>Törlés</button>
-          <button onClick={() => setSelectedDay(null)}>Mégse</button>
+          <button onClick={()=>setSelectedDay(null)}>Mégse</button>
+        </div>
+      )}
+
+      {/* 🎲 DICE */}
+      <img
+        src="/assets/dice.png"
+        alt="dice"
+        onClick={rollDice}
+        style={{position:"fixed",right:20,bottom:20,width:60,cursor:"pointer"}}
+      />
+      {dice && (
+        <div style={{
+          position:"fixed",right:100,bottom:40,
+          background:"#000c",padding:10,fontSize:24
+        }}>
+          🎲 {dice}
         </div>
       )}
     </div>
