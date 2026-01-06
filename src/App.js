@@ -1,134 +1,170 @@
-import { useEffect, useState } from "react";
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { useState, useEffect } from "react";
 
-/* ===== FIREBASE ===== */
-const firebaseConfig = {
-  apiKey: "AIzaSyAxaQKdai1nV7coNTkXwnWF6vlXXUlk4aE",
-  authDomain: "database-7ce1b.firebaseapp.com",
-  projectId: "database-7ce1b",
+/* ===== KONFIG ===== */
+const COLORS = ["green","purple","yellow","orange","red","blue"];
+const COLOR_NAMES = {
+  green: "Habo",
+  purple: "Puszta",
+  yellow: "Jankisz",
+  orange: "Lidi",
+  red: "Sho",
+  blue: "Dorka"
 };
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-/* ===== USERS ===== */
-const USERS = [
-  { name: "Habo", color: "green" },
-  { name: "Puszta", color: "purple" },
-  { name: "Jankisz", color: "gold" },
-  { name: "Lidi", color: "orange" },
-  { name: "Sho", color: "red" },
-  { name: "Dorka", color: "blue" },
-];
-
-const WEEKDAYS = ["H", "K", "Sz", "Cs", "P", "Sz", "V"];
-const MONTHS = [
-  "Január","Február","Március","Április","Május","Június",
-  "Július","Augusztus","Szeptember","Október","November","December"
-];
-
-const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
-const firstOffset = (y, m) => (new Date(y, m, 1).getDay() + 6) % 7;
-const keyFor = (y, m, d) => `${y}-${m+1}-${d}`;
+const WEEKDAYS = ["H","K","Sze","Cs","P","Szo","V"];
 
 /* ===== APP ===== */
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [currentDate, setCurrentDate] = useState(new Date(2026,0,1));
   const [entries, setEntries] = useState({});
-  const [date, setDate] = useState(new Date(2026, 0, 1));
   const [selectedDay, setSelectedDay] = useState(null);
-  const [form, setForm] = useState({ answer: "Igen", time: "" });
 
-  /* LOAD */
-  useEffect(() => {
-    getDoc(doc(db, "calendar", "shared")).then(snap => {
-      if (snap.exists()) setEntries(snap.data());
+  const [userColor, setUserColor] = useState(
+    localStorage.getItem("userColor")
+  );
+
+  /* === Dice / Dragon === */
+  const [rolling,setRolling] = useState(false);
+  const [diceResult,setDiceResult] = useState(null);
+  const [showDice,setShowDice] = useState(true);
+  const [eatDice,setEatDice] = useState(false);
+
+  function rollDice(){
+    if(rolling) return;
+    setRolling(true);
+    setDiceResult(null);
+    setEatDice(false);
+    setShowDice(true);
+
+    setTimeout(()=>setEatDice(true),800);
+    setTimeout(()=>setShowDice(false),1200);
+    setTimeout(()=>{
+      setDiceResult(Math.floor(Math.random()*20)+1);
+    },1600);
+    setTimeout(()=>{
+      setShowDice(true);
+      setEatDice(false);
+      setRolling(false);
+    },3600);
+  }
+
+  function daysInMonth(y,m){
+    return new Date(y,m+1,0).getDate();
+  }
+
+  function keyOf(d){
+    return `${currentDate.getFullYear()}-${currentDate.getMonth()+1}-${d}`;
+  }
+
+  function saveAnswer(day,answer){
+    const key = keyOf(day);
+    setEntries(prev=>{
+      const arr = prev[key]||[];
+      const filtered = arr.filter(a=>a.color!==userColor);
+      return {...prev,[key]:[...filtered,answer]};
     });
-  }, []);
+  }
 
-  const saveCloud = (data) =>
-    setDoc(doc(db, "calendar", "shared"), data);
+  function deleteAnswer(day){
+    const key = keyOf(day);
+    setEntries(prev=>{
+      const arr = (prev[key]||[]).filter(a=>a.color!==userColor);
+      return {...prev,[key]:arr};
+    });
+  }
 
-  /* LOGIN */
-  if (!user) {
+  if(!userColor){
     return (
-      <div style={login}>
+      <div style={{padding:30}}>
         <h2>Válaszd ki magad</h2>
-        {USERS.map(u => (
+        {COLORS.map(c=>(
           <button
-            key={u.name}
-            onClick={() => setUser(u)}
-            style={{ ...btn, borderColor: u.color, color: u.color }}
+            key={c}
+            onClick={()=>{
+              localStorage.setItem("userColor",c);
+              setUserColor(c);
+            }}
+            style={{
+              background:c,
+              margin:5,
+              padding:"10px 20px",
+              textDecoration:
+                localStorage.getItem("userColor")===c?"line-through":"none",
+              opacity:
+                localStorage.getItem("userColor")===c?0.6:1
+            }}
           >
-            ● {u.name}
+            ● {COLOR_NAMES[c]}
           </button>
         ))}
       </div>
     );
   }
 
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const days = daysInMonth(y, m);
-  const offset = firstOffset(y, m);
-
-  const saveDay = () => {
-    const key = keyFor(y, m, selectedDay);
-    const prev = entries[key] || [];
-    const filtered = prev.filter(e => e.name !== user.name);
-
-    const updated = [
-      ...filtered,
-      { name: user.name, color: user.color, ...form }
-    ];
-
-    const all = { ...entries, [key]: updated };
-    setEntries(all);
-    saveCloud(all);
-    setSelectedDay(null);
-  };
-
-  const deleteMine = () => {
-    const key = keyFor(y, m, selectedDay);
-    const filtered = (entries[key] || []).filter(e => e.name !== user.name);
-    const all = { ...entries, [key]: filtered };
-    setEntries(all);
-    saveCloud(all);
-    setSelectedDay(null);
-  };
-
   return (
-    <div style={{ padding: 10 }}>
-      <div style={header}>
-        <button onClick={() => setDate(new Date(y, m-1, 1))}>◀</button>
-        <h2>{MONTHS[m]} {y}</h2>
-        <button onClick={() => setDate(new Date(y, m+1, 1))}>▶</button>
+    <div style={{
+      minHeight:"100vh",
+      backgroundImage:"url('/assets/hatter.jpg')",
+      backgroundSize:"cover",
+      padding:20
+    }}>
+
+      <h1>Közös naptár</h1>
+
+      {/* ===== NAV ===== */}
+      <button onClick={()=>setCurrentDate(
+        new Date(currentDate.getFullYear(),currentDate.getMonth()-1,1)
+      )}>◀</button>
+      <b style={{margin:"0 10px"}}>
+        {currentDate.getFullYear()} / {currentDate.getMonth()+1}
+      </b>
+      <button onClick={()=>setCurrentDate(
+        new Date(currentDate.getFullYear(),currentDate.getMonth()+1,1)
+      )}>▶</button>
+
+      {/* ===== WEEKDAYS ===== */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:"repeat(7,1fr)",
+        marginTop:10
+      }}>
+        {WEEKDAYS.map(d=>(
+          <div key={d} style={{fontSize:12,textAlign:"center"}}>{d}</div>
+        ))}
       </div>
 
-      <div style={grid}>
-        {WEEKDAYS.map(d => <div key={d} style={weekday}>{d}</div>)}
-        {Array(offset).fill(0).map((_,i)=><div key={i} />)}
-
-        {Array(days).fill(0).map((_,i)=>{
-          const d = i+1;
-          const key = keyFor(y,m,d);
-          const dayEntries = entries[key] || [];
-
+      {/* ===== CALENDAR ===== */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:"repeat(7,1fr)",
+        gap:5
+      }}>
+        {Array.from(
+          {length:daysInMonth(currentDate.getFullYear(),currentDate.getMonth())},
+          (_,i)=>i+1
+        ).map(day=>{
+          const arr = entries[keyOf(day)]||[];
+          const allUsed = COLORS.every(c=>arr.some(a=>a.color===c));
           return (
-            <div key={d} style={day} onClick={()=>{
-              setSelectedDay(d);
-              const mine = dayEntries.find(e=>e.name===user.name);
-              setForm(mine || { answer:"Igen", time:"" });
-            }}>
-              <strong>{d}</strong>
-              <div style={{ display:"flex", flexWrap:"wrap" }}>
-                {dayEntries.map((e,idx)=>(
-                  <div key={idx} style={{
-                    width:10,height:10,borderRadius:"50%",
+            <div key={day}
+              onClick={()=>setSelectedDay(day)}
+              style={{
+                border:"1px solid #333",
+                padding:5,
+                cursor:"pointer"
+              }}>
+              <div style={{color:allUsed?"green":"black"}}>
+                {day}
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap"}}>
+                {arr.map((a,i)=>(
+                  <div key={i} style={{
+                    width:10,height:10,
+                    borderRadius:"50%",
                     margin:1,
-                    border:`2px solid ${e.color}`,
-                    background:e.answer==="Igen"?e.color:"transparent"
+                    border:a.answer==="muszaj"
+                      ?`2px solid ${a.color}`:"none",
+                    background:
+                      a.answer==="muszaj"?"transparent":a.color
                   }} />
                 ))}
               </div>
@@ -137,55 +173,71 @@ export default function App() {
         })}
       </div>
 
+      {/* ===== MODAL ===== */}
       {selectedDay && (
-        <div style={modal}>
-          <h3>{MONTHS[m]} {selectedDay}</h3>
+        <div style={{background:"#fff",padding:10,marginTop:20}}>
+          <h3>{selectedDay}. nap válaszai</h3>
 
-          {(entries[keyFor(y,m,selectedDay)]||[]).map((e,idx)=>(
-            <div key={idx} style={{
-              border:`2px solid ${e.color}`,
-              padding:4, marginBottom:4
-            }}>
-              <strong>{e.name}</strong> – {e.answer}
-              {e.time && ` (${e.time}:00-tól)`}
+          {(entries[keyOf(selectedDay)]||[]).map((a,i)=>(
+            <div key={i}>
+              {COLOR_NAMES[a.color]} – {a.answer}
             </div>
           ))}
 
-          <select value={form.answer}
-            onChange={e=>setForm({...form,answer:e.target.value})}>
-            <option>Igen</option>
-            <option>Csak ha nagyon muszáj</option>
-          </select>
+          <button onClick={()=>saveAnswer(selectedDay,{
+            color:userColor,
+            answer:"igen"
+          })}>Igen</button>
 
-          <input
-            type="number"
-            placeholder="órától"
-            value={form.time}
-            onChange={e=>setForm({...form,time:e.target.value})}
-          />
+          <button onClick={()=>saveAnswer(selectedDay,{
+            color:userColor,
+            answer:"muszaj"
+          })}>Csak ha nagyon muszáj</button>
 
-          <div>
-            <button onClick={saveDay}>Mentés</button>
-            <button onClick={deleteMine}>Törlés</button>
-            <button onClick={()=>setSelectedDay(null)}>Bezár</button>
-          </div>
+          <button onClick={()=>deleteAnswer(selectedDay)}>Törlés</button>
+          <button onClick={()=>setSelectedDay(null)}>Bezár</button>
         </div>
+      )}
+
+      {/* ===== DICE ===== */}
+      {showDice && (
+        <img
+          src="/assets/dice.png"
+          alt="dice"
+          onClick={rollDice}
+          style={{
+            width:80,
+            position:"fixed",
+            bottom:20,
+            right:20,
+            cursor:"pointer"
+          }}
+        />
+      )}
+
+      {diceResult && (
+        <div style={{
+          position:"fixed",
+          bottom:120,
+          right:40,
+          fontSize:24
+        }}>
+          🎲 {diceResult}
+        </div>
+      )}
+
+      {eatDice && (
+        <img
+          src="/assets/dragon.png"
+          alt="dragon"
+          style={{
+            width:200,
+            position:"fixed",
+            bottom:20,
+            right:20
+          }}
+        />
       )}
     </div>
   );
 }
-
-/* ===== STYLES ===== */
-const grid = { display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 };
-const day = { border:"1px solid #ccc", minHeight:60, padding:4 };
-const weekday = { textAlign:"center", fontSize:12 };
-const header = { display:"flex", justifyContent:"space-between" };
-const modal = {
-  position:"fixed", bottom:0, left:0, right:0,
-  background:"#fff", padding:10, maxHeight:"60vh", overflow:"auto"
-};
-const login = {
-  minHeight:"100vh", display:"flex",
-  flexDirection:"column", alignItems:"center", justifyContent:"center"
-};
-const btn = { background:"none", border:"2px solid", padding:10, margin:5 };
