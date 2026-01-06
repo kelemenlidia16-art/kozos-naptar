@@ -1,99 +1,58 @@
-import { useState, useEffect } from "react";
+import React, { useState } from "react";
 
-/* ===== KONFIG ===== */
-const COLORS = ["green","purple","yellow","orange","red","blue"];
-const COLOR_NAMES = {
+const USERS = {
   green: "Habo",
   purple: "Puszta",
   yellow: "Jankisz",
   orange: "Lidi",
   red: "Sho",
-  blue: "Dorka"
+  blue: "Dorka",
 };
-const WEEKDAYS = ["H","K","Sze","Cs","P","Szo","V"];
 
-/* ===== APP ===== */
-export default function App() {
-  const [currentDate, setCurrentDate] = useState(new Date(2026,0,1));
-  const [entries, setEntries] = useState({});
+const COLORS = Object.keys(USERS);
+
+function getDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function App() {
+  const [year] = useState(2026);
+  const [month, setMonth] = useState(0);
+  const [userColor, setUserColor] = useState("");
+  const [data, setData] = useState({});
   const [selectedDay, setSelectedDay] = useState(null);
 
-  const [userColor, setUserColor] = useState(
-    localStorage.getItem("userColor")
-  );
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = new Date(year, month, 1).getDay();
+  const offset = (firstDay + 6) % 7;
 
-  /* === Dice / Dragon === */
-  const [rolling,setRolling] = useState(false);
-  const [diceResult,setDiceResult] = useState(null);
-  const [showDice,setShowDice] = useState(true);
-  const [eatDice,setEatDice] = useState(false);
+  const monthName = new Date(year, month).toLocaleString("hu-HU", {
+    month: "long",
+  });
 
-  function rollDice(){
-    if(rolling) return;
-    setRolling(true);
-    setDiceResult(null);
-    setEatDice(false);
-    setShowDice(true);
-
-    setTimeout(()=>setEatDice(true),800);
-    setTimeout(()=>setShowDice(false),1200);
-    setTimeout(()=>{
-      setDiceResult(Math.floor(Math.random()*20)+1);
-    },1600);
-    setTimeout(()=>{
-      setShowDice(true);
-      setEatDice(false);
-      setRolling(false);
-    },3600);
-  }
-
-  function daysInMonth(y,m){
-    return new Date(y,m+1,0).getDate();
-  }
-
-  function keyOf(d){
-    return `${currentDate.getFullYear()}-${currentDate.getMonth()+1}-${d}`;
-  }
-
-  function saveAnswer(day,answer){
-    const key = keyOf(day);
-    setEntries(prev=>{
-      const arr = prev[key]||[];
-      const filtered = arr.filter(a=>a.color!==userColor);
-      return {...prev,[key]:[...filtered,answer]};
+  function saveAnswer(day, answer) {
+    setData((prev) => {
+      const dayKey = `${year}-${month}-${day}`;
+      const dayData = prev[dayKey] || [];
+      const filtered = dayData.filter((a) => a.color !== userColor);
+      return {
+        ...prev,
+        [dayKey]: [...filtered, answer],
+      };
     });
   }
 
-  function deleteAnswer(day){
-    const key = keyOf(day);
-    setEntries(prev=>{
-      const arr = (prev[key]||[]).filter(a=>a.color!==userColor);
-      return {...prev,[key]:arr};
-    });
-  }
-
-  if(!userColor){
+  if (!userColor) {
     return (
-      <div style={{padding:30}}>
-        <h2>Válaszd ki magad</h2>
-        {COLORS.map(c=>(
+      <div style={styles.login}>
+        <h2>Válassz színt</h2>
+        {COLORS.map((c) => (
           <button
             key={c}
-            onClick={()=>{
-              localStorage.setItem("userColor",c);
-              setUserColor(c);
-            }}
-            style={{
-              background:c,
-              margin:5,
-              padding:"10px 20px",
-              textDecoration:
-                localStorage.getItem("userColor")===c?"line-through":"none",
-              opacity:
-                localStorage.getItem("userColor")===c?0.6:1
-            }}
+            onClick={() => setUserColor(c)}
+            style={{ ...styles.colorBtn, borderColor: c }}
           >
-            ● {COLOR_NAMES[c]}
+            {USERS[c]}
           </button>
         ))}
       </div>
@@ -101,71 +60,46 @@ export default function App() {
   }
 
   return (
-    <div style={{
-      minHeight:"100vh",
-      backgroundImage:"url('/assets/hatter.jpg')",
-      backgroundSize:"cover",
-      padding:20
-    }}>
+    <div style={styles.app}>
+      <h1>{monthName} {year}</h1>
 
-      <h1>Közös naptár</h1>
-
-      {/* ===== NAV ===== */}
-      <button onClick={()=>setCurrentDate(
-        new Date(currentDate.getFullYear(),currentDate.getMonth()-1,1)
-      )}>◀</button>
-      <b style={{margin:"0 10px"}}>
-        {currentDate.getFullYear()} / {currentDate.getMonth()+1}
-      </b>
-      <button onClick={()=>setCurrentDate(
-        new Date(currentDate.getFullYear(),currentDate.getMonth()+1,1)
-      )}>▶</button>
-
-      {/* ===== WEEKDAYS ===== */}
-      <div style={{
-        display:"grid",
-        gridTemplateColumns:"repeat(7,1fr)",
-        marginTop:10
-      }}>
-        {WEEKDAYS.map(d=>(
-          <div key={d} style={{fontSize:12,textAlign:"center"}}>{d}</div>
-        ))}
+      <div style={styles.nav}>
+        <button onClick={() => setMonth((m) => Math.max(0, m - 1))}>◀</button>
+        <button onClick={() => setMonth((m) => Math.min(11, m + 1))}>▶</button>
       </div>
 
-      {/* ===== CALENDAR ===== */}
-      <div style={{
-        display:"grid",
-        gridTemplateColumns:"repeat(7,1fr)",
-        gap:5
-      }}>
-        {Array.from(
-          {length:daysInMonth(currentDate.getFullYear(),currentDate.getMonth())},
-          (_,i)=>i+1
-        ).map(day=>{
-          const arr = entries[keyOf(day)]||[];
-          const allUsed = COLORS.every(c=>arr.some(a=>a.color===c));
+      <div style={styles.grid}>
+        {["H", "K", "Sze", "Cs", "P", "Szo", "V"].map((d) => (
+          <div key={d} style={styles.weekday}>{d}</div>
+        ))}
+
+        {[...Array(offset)].map((_, i) => (
+          <div key={"e" + i} />
+        ))}
+
+        {[...Array(daysInMonth)].map((_, i) => {
+          const day = i + 1;
+          const key = `${year}-${month}-${day}`;
+          const answers = data[key] || [];
+
           return (
-            <div key={day}
-              onClick={()=>setSelectedDay(day)}
-              style={{
-                border:"1px solid #333",
-                padding:5,
-                cursor:"pointer"
-              }}>
-              <div style={{color:allUsed?"green":"black"}}>
-                {day}
-              </div>
-              <div style={{display:"flex",flexWrap:"wrap"}}>
-                {arr.map((a,i)=>(
-                  <div key={i} style={{
-                    width:10,height:10,
-                    borderRadius:"50%",
-                    margin:1,
-                    border:a.answer==="muszaj"
-                      ?`2px solid ${a.color}`:"none",
-                    background:
-                      a.answer==="muszaj"?"transparent":a.color
-                  }} />
+            <div
+              key={day}
+              style={styles.day}
+              onClick={() => setSelectedDay(day)}
+            >
+              <strong>{day}</strong>
+              <div style={styles.dots}>
+                {answers.map((a, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      ...styles.dot,
+                      background:
+                        a.type === "muszaj" ? "transparent" : a.color,
+                      borderColor: a.color,
+                    }}
+                  />
                 ))}
               </div>
             </div>
@@ -173,71 +107,125 @@ export default function App() {
         })}
       </div>
 
-      {/* ===== MODAL ===== */}
       {selectedDay && (
-        <div style={{background:"#fff",padding:10,marginTop:20}}>
-          <h3>{selectedDay}. nap válaszai</h3>
-
-          {(entries[keyOf(selectedDay)]||[]).map((a,i)=>(
-            <div key={i}>
-              {COLOR_NAMES[a.color]} – {a.answer}
-            </div>
-          ))}
-
-          <button onClick={()=>saveAnswer(selectedDay,{
-            color:userColor,
-            answer:"igen"
-          })}>Igen</button>
-
-          <button onClick={()=>saveAnswer(selectedDay,{
-            color:userColor,
-            answer:"muszaj"
-          })}>Csak ha nagyon muszáj</button>
-
-          <button onClick={()=>deleteAnswer(selectedDay)}>Törlés</button>
-          <button onClick={()=>setSelectedDay(null)}>Bezár</button>
-        </div>
-      )}
-
-      {/* ===== DICE ===== */}
-      {showDice && (
-        <img
-          src="/assets/dice.png"
-          alt="dice"
-          onClick={rollDice}
-          style={{
-            width:80,
-            position:"fixed",
-            bottom:20,
-            right:20,
-            cursor:"pointer"
-          }}
-        />
-      )}
-
-      {diceResult && (
-        <div style={{
-          position:"fixed",
-          bottom:120,
-          right:40,
-          fontSize:24
-        }}>
-          🎲 {diceResult}
-        </div>
-      )}
-
-      {eatDice && (
-        <img
-          src="/assets/dragon.png"
-          alt="dragon"
-          style={{
-            width:200,
-            position:"fixed",
-            bottom:20,
-            right:20
-          }}
+        <DayModal
+          day={selectedDay}
+          data={data}
+          userColor={userColor}
+          saveAnswer={saveAnswer}
+          close={() => setSelectedDay(null)}
         />
       )}
     </div>
   );
 }
+
+function DayModal({ day, data, userColor, saveAnswer, close }) {
+  const key = `2026-${new Date().getMonth()}-${day}`;
+  const answers = data[key] || [];
+  const myAnswer = answers.find((a) => a.color === userColor);
+
+  const [type, setType] = useState(myAnswer?.type || "igen");
+  const [time, setTime] = useState(myAnswer?.time || "");
+
+  function submit() {
+    saveAnswer(day, {
+      color: userColor,
+      name: USERS[userColor],
+      type,
+      time,
+    });
+    close();
+  }
+
+  return (
+    <div style={styles.modalBg}>
+      <div style={styles.modal}>
+        <h3>{day}. nap válaszai</h3>
+
+        {answers.map((a, i) => (
+          <div
+            key={i}
+            style={{ ...styles.answer, borderColor: a.color }}
+          >
+            <b>{a.name}</b> – {a.type}
+            {a.time && ` (${a.time}h)`}
+          </div>
+        ))}
+
+        <hr />
+
+        <h4>Saját válasz</h4>
+
+        <button onClick={() => setType("igen")}>Igen</button>
+        <button onClick={() => setType("muszaj")}>Csak ha nagyon muszáj</button>
+        <button onClick={() => setType("egyeni")}>Más időben</button>
+
+        {type === "egyeni" && (
+          <input
+            type="number"
+            placeholder="óra"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
+        )}
+
+        <div style={{ marginTop: 10 }}>
+          <button onClick={submit}>Mentés</button>
+          <button onClick={close}>Bezár</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  app: { padding: 20, color: "white" },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(7, 1fr)",
+    gap: 6,
+  },
+  weekday: { fontSize: 12, textAlign: "center" },
+  day: {
+    background: "rgba(255,255,255,0.1)",
+    padding: 6,
+    borderRadius: 6,
+    cursor: "pointer",
+  },
+  dots: { display: "flex", gap: 3, flexWrap: "wrap" },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    border: "2px solid",
+  },
+  modalBg: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+  },
+  modal: {
+    background: "#222",
+    padding: 20,
+    margin: "10% auto",
+    width: 300,
+  },
+  answer: {
+    border: "2px solid",
+    padding: 4,
+    marginBottom: 4,
+  },
+  login: { padding: 40 },
+  colorBtn: {
+    display: "block",
+    margin: 8,
+    padding: 10,
+    border: "3px solid",
+    background: "transparent",
+    color: "white",
+  },
+  nav: { marginBottom: 10 },
+};
+
+export default App;
