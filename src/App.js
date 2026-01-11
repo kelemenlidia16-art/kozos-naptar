@@ -1,103 +1,181 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
-const USERS = {
-  green: "Habo",
-  purple: "Puszta",
-  yellow: "Jankisz",
-  orange: "Lidi",
-  red: "Sho",
-  blue: "Dorka",
+/* ===== FIREBASE ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyAxaQKdai1nV7coNTkXwnWF6vlXXUlk4aE",
+  authDomain: "database-7ce1b.firebaseapp.com",
+  projectId: "database-7ce1b",
 };
 
-const COLORS = Object.keys(USERS);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-function getDaysInMonth(year, month) {
-  return new Date(year, month + 1, 0).getDate();
-}
+/* ===== SZÍNEK / NEVEK ===== */
+const USERS = [
+  { color: "green", name: "Habo" },
+  { color: "purple", name: "Puszta" },
+  { color: "yellow", name: "Jankisz" },
+  { color: "orange", name: "Lidi" },
+  { color: "red", name: "Sho" },
+  { color: "blue", name: "Dorka" },
+];
 
-function App() {
-  const [year] = useState(2026);
-  const [month, setMonth] = useState(0);
-  const [userColor, setUserColor] = useState("");
-  const [data, setData] = useState({});
+const monthNames = [
+  "Január","Február","Március","Április","Május","Június",
+  "Július","Augusztus","Szeptember","Október","November","December"
+];
+
+const weekDays = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [entries, setEntries] = useState({});
+  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
   const [selectedDay, setSelectedDay] = useState(null);
+  const [customTime, setCustomTime] = useState("");
 
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDay = new Date(year, month, 1).getDay();
-  const offset = (firstDay + 6) % 7;
+  /* ===== FIREBASE LOAD ===== */
+  useEffect(() => {
+    async function load() {
+      const ref = doc(db, "calendar", "shared");
+      const snap = await getDoc(ref);
+      if (snap.exists()) setEntries(snap.data());
+    }
+    load();
+  }, []);
 
-  const monthName = new Date(year, month).toLocaleString("hu-HU", {
-    month: "long",
-  });
-
-  function saveAnswer(day, answer) {
-    setData((prev) => {
-      const dayKey = `${year}-${month}-${day}`;
-      const dayData = prev[dayKey] || [];
-      const filtered = dayData.filter((a) => a.color !== userColor);
-      return {
-        ...prev,
-        [dayKey]: [...filtered, answer],
-      };
-    });
+  async function saveCloud(data) {
+    await setDoc(doc(db, "calendar", "shared"), data);
   }
 
-  if (!userColor) {
+  /* ===== DATE HELPERS ===== */
+  function formatKey(y, m, d) {
+    return `${y}-${m + 1}-${d}`;
+  }
+
+  function daysInMonth(y, m) {
+    return new Date(y, m + 1, 0).getDate();
+  }
+
+  const firstDayOffset =
+    (new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay() + 6) % 7;
+
+  /* ===== SAVE ANSWER ===== */
+  function saveAnswer(type) {
+    const key = formatKey(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      selectedDay
+    );
+
+    const list = entries[key] || [];
+    const filtered = list.filter((e) => e.color !== user.color);
+
+    filtered.push({
+      name: user.name,
+      color: user.color,
+      type,
+      time: type === "custom" ? customTime : null,
+    });
+
+    const updated = { ...entries, [key]: filtered };
+    setEntries(updated);
+    saveCloud(updated);
+    setSelectedDay(null);
+    setCustomTime("");
+  }
+
+  function deleteOwn() {
+    const key = formatKey(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      selectedDay
+    );
+    const filtered = (entries[key] || []).filter(
+      (e) => e.color !== user.color
+    );
+    const updated = { ...entries, [key]: filtered };
+    setEntries(updated);
+    saveCloud(updated);
+    setSelectedDay(null);
+  }
+
+  /* ===== LOGIN ===== */
+  if (!user) {
     return (
-      <div style={styles.login}>
-        <h2>Válassz színt</h2>
-        {COLORS.map((c) => (
+      <div style={{ padding: 20 }}>
+        <h2>Válaszd ki magad</h2>
+        {USERS.map((u) => (
           <button
-            key={c}
-            onClick={() => setUserColor(c)}
-            style={{ ...styles.colorBtn, borderColor: c }}
+            key={u.color}
+            onClick={() => setUser(u)}
+            style={{
+              margin: 5,
+              padding: 10,
+              border: `3px solid ${u.color}`,
+              background: "white",
+              cursor: "pointer",
+            }}
           >
-            {USERS[c]}
+            ● {u.name}
           </button>
         ))}
       </div>
     );
   }
 
+  /* ===== RENDER ===== */
   return (
-    <div style={styles.app}>
-      <h1>{monthName} {year}</h1>
+    <div style={{ padding: 10 }}>
+      <h2>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
 
-      <div style={styles.nav}>
-        <button onClick={() => setMonth((m) => Math.max(0, m - 1))}>◀</button>
-        <button onClick={() => setMonth((m) => Math.min(11, m + 1))}>▶</button>
-      </div>
+      <button onClick={() => setCurrentDate(
+        new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+      )}>◀</button>
 
-      <div style={styles.grid}>
-        {["H", "K", "Sze", "Cs", "P", "Szo", "V"].map((d) => (
-          <div key={d} style={styles.weekday}>{d}</div>
-        ))}
+      <button onClick={() => setCurrentDate(
+        new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+      )}>▶</button>
 
-        {[...Array(offset)].map((_, i) => (
-          <div key={"e" + i} />
-        ))}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(7, 1fr)",
+        marginTop: 10
+      }}>
+        {weekDays.map(d => <div key={d} style={{fontSize:12,textAlign:"center"}}>{d}</div>)}
+        {Array(firstDayOffset).fill(null).map((_,i)=><div key={i}></div>)}
 
-        {[...Array(daysInMonth)].map((_, i) => {
+        {Array.from({ length: daysInMonth(currentDate.getFullYear(), currentDate.getMonth()) }, (_, i) => {
           const day = i + 1;
-          const key = `${year}-${month}-${day}`;
-          const answers = data[key] || [];
+          const key = formatKey(currentDate.getFullYear(), currentDate.getMonth(), day);
+          const list = entries[key] || [];
 
           return (
             <div
               key={day}
-              style={styles.day}
               onClick={() => setSelectedDay(day)}
+              style={{
+                border: "1px solid #ccc",
+                minHeight: 60,
+                padding: 3,
+                cursor: "pointer",
+              }}
             >
               <strong>{day}</strong>
-              <div style={styles.dots}>
-                {answers.map((a, i) => (
-                  <span
-                    key={i}
+              <div style={{ display: "flex", flexWrap: "wrap" }}>
+                {list.map((e, idx) => (
+                  <div
+                    key={idx}
+                    title={e.name}
                     style={{
-                      ...styles.dot,
-                      background:
-                        a.type === "muszaj" ? "transparent" : a.color,
-                      borderColor: a.color,
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      margin: 2,
+                      background: e.type === "maybe" ? "transparent" : e.color,
+                      border: `2px solid ${e.color}`,
                     }}
                   />
                 ))}
@@ -108,124 +186,47 @@ function App() {
       </div>
 
       {selectedDay && (
-        <DayModal
-          day={selectedDay}
-          data={data}
-          userColor={userColor}
-          saveAnswer={saveAnswer}
-          close={() => setSelectedDay(null)}
-        />
+        <div style={{ marginTop: 20, border: "2px solid black", padding: 10 }}>
+          <h3>{selectedDay}. nap válaszai</h3>
+
+          {(entries[formatKey(
+            currentDate.getFullYear(),
+            currentDate.getMonth(),
+            selectedDay
+          )] || []).map((e, i) => (
+            <div key={i} style={{ marginBottom: 4 }}>
+              <span style={{ color: e.color, fontWeight: "bold" }}>
+                {e.name}
+              </span>{" "}
+              – {e.type === "yes" && "Igen"}
+              {e.type === "maybe" && "Csak ha nagyon muszáj"}
+              {e.type === "custom" && ` ${e.time} órától`}
+            </div>
+          ))}
+
+          <hr />
+
+          <button onClick={() => saveAnswer("yes")}>Igen</button>
+          <button onClick={() => saveAnswer("maybe")}>Csak ha nagyon muszáj</button>
+
+          <div style={{ marginTop: 5 }}>
+            <button onClick={() => saveAnswer("custom")}>Más időben →</button>
+            <input
+              type="number"
+              placeholder="óra"
+              value={customTime}
+              onChange={(e) => setCustomTime(e.target.value)}
+              style={{ marginLeft: 5, width: 60 }}
+            />
+          </div>
+
+          <button onClick={deleteOwn} style={{ marginTop: 5 }}>
+            Saját válasz törlése
+          </button>
+
+          <button onClick={() => setSelectedDay(null)}>Bezár</button>
+        </div>
       )}
     </div>
   );
 }
-
-function DayModal({ day, data, userColor, saveAnswer, close }) {
-  const key = `2026-${new Date().getMonth()}-${day}`;
-  const answers = data[key] || [];
-  const myAnswer = answers.find((a) => a.color === userColor);
-
-  const [type, setType] = useState(myAnswer?.type || "igen");
-  const [time, setTime] = useState(myAnswer?.time || "");
-
-  function submit() {
-    saveAnswer(day, {
-      color: userColor,
-      name: USERS[userColor],
-      type,
-      time,
-    });
-    close();
-  }
-
-  return (
-    <div style={styles.modalBg}>
-      <div style={styles.modal}>
-        <h3>{day}. nap válaszai</h3>
-
-        {answers.map((a, i) => (
-          <div
-            key={i}
-            style={{ ...styles.answer, borderColor: a.color }}
-          >
-            <b>{a.name}</b> – {a.type}
-            {a.time && ` (${a.time}h)`}
-          </div>
-        ))}
-
-        <hr />
-
-        <h4>Saját válasz</h4>
-
-        <button onClick={() => setType("igen")}>Igen</button>
-        <button onClick={() => setType("muszaj")}>Csak ha nagyon muszáj</button>
-        <button onClick={() => setType("egyeni")}>Más időben</button>
-
-        {type === "egyeni" && (
-          <input
-            type="number"
-            placeholder="óra"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-          />
-        )}
-
-        <div style={{ marginTop: 10 }}>
-          <button onClick={submit}>Mentés</button>
-          <button onClick={close}>Bezár</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const styles = {
-  app: { padding: 20, color: "white" },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    gap: 6,
-  },
-  weekday: { fontSize: 12, textAlign: "center" },
-  day: {
-    background: "rgba(255,255,255,0.1)",
-    padding: 6,
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-  dots: { display: "flex", gap: 3, flexWrap: "wrap" },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    border: "2px solid",
-  },
-  modalBg: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.6)",
-  },
-  modal: {
-    background: "#222",
-    padding: 20,
-    margin: "10% auto",
-    width: 300,
-  },
-  answer: {
-    border: "2px solid",
-    padding: 4,
-    marginBottom: 4,
-  },
-  login: { padding: 40 },
-  colorBtn: {
-    display: "block",
-    margin: 8,
-    padding: 10,
-    border: "3px solid",
-    background: "transparent",
-    color: "white",
-  },
-  nav: { marginBottom: 10 },
-};
-
-export default App;
